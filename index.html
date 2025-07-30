@@ -71,12 +71,22 @@
             background: #0070f3;
             color: white;
         }
+
+        .confirmation {
+            background: #e6ffed;
+            border: 1px solid #b3e6c1;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+            text-align: center;
+        }
     </style>
 </head>
 
 <body>
     <h1>Book Your Appointment</h1>
-    <form id="booking-form" method="POST" action="https://appointment-worker.cameron-07f.workers.dev/">
+
+    <form id="booking-form">
         <label for="name">Your Name</label>
         <input type="text" name="name" id="name" required />
 
@@ -84,20 +94,21 @@
         <input type="email" name="email" id="email" required />
 
         <label for="phone">Phone Number</label>
-        <input type="tel" name="phone" id="phone" />
+        <input type="tel" name="phone" id="phone" pattern="[\d\s\-\(\)]{7,}" title="Enter a valid phone number" />
 
         <label for="date">Select a Date</label>
-        <input type="date" id="date" required />
+        <input type="date" id="date" required min="<?= new Date().toISOString().split('T')[0] ?>" />
 
         <div id="time-label" style="display:none;"><strong>Pick a Time:</strong></div>
         <div id="time-grid" class="slot-grid"></div>
 
-        <!-- Hidden fields -->
         <input type="hidden" name="selectedTime" id="selectedTime" />
         <input type="hidden" name="cm" id="cm" />
 
-        <button type="submit">Book Appointment</button>
+        <button type="submit" id="submit-btn">Book Appointment</button>
     </form>
+
+    <div id="confirmation" class="confirmation" style="display: none;"></div>
 
     <script>
         const cm = new URLSearchParams(window.location.search).get('cm');
@@ -108,6 +119,9 @@
         const grid = document.getElementById('time-grid');
         const selectedTimeInput = document.getElementById('selectedTime');
         const timeLabel = document.getElementById('time-label');
+        const form = document.getElementById('booking-form');
+        const confirmation = document.getElementById('confirmation');
+        const submitBtn = document.getElementById('submit-btn');
 
         let selectedSlot = null;
 
@@ -126,7 +140,6 @@
                     .map(d => d.getHours() * 60 + d.getMinutes())
             );
 
-            // Generate slots from 9 AM to 5 PM, every 30 min
             const slots = [];
             for (let h = 9; h < 17; h++) {
                 slots.push(`${h.toString().padStart(2, '0')}:00`);
@@ -160,6 +173,55 @@
 
             if (grid.innerHTML.trim() === "") {
                 grid.innerHTML = "<div>No available time slots today.</div>";
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!selectedSlot || selectedSlot < new Date()) {
+                alert("Please select a valid future time slot.");
+                return;
+            }
+
+            submitBtn.disabled = true;
+            const formData = new FormData(form);
+            const payload = Object.fromEntries(formData.entries());
+
+            const res = await fetch("https://appointment-worker.cameron-07f.workers.dev/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const start = new Date(payload.selectedTime);
+                const end = new Date(start.getTime() + 30 * 60 * 1000);
+                const format = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "").slice(0, 15);
+
+                const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Appointment&dates=${format(start)}/${format(end)}&details=Booked+with+Five+Star+Tax&sf=true`;
+                const icsLink = `data:text/calendar;charset=utf8,BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:${format(start)}
+DTEND:${format(end)}
+SUMMARY:Appointment with Five Star Tax
+DESCRIPTION:Use the email link to join or check your inbox for confirmation
+END:VEVENT
+END:VCALENDAR`.replace(/\n/g, "%0A");
+
+                confirmation.innerHTML = `
+          <h2>✅ Appointment Confirmed!</h2>
+          <p>We've booked your time and sent an invite.</p>
+          <p>
+            <a href="${gcal}" target="_blank">📅 Add to Google Calendar</a><br/>
+            <a href="${icsLink}" download="appointment.ics">📥 Download .ICS (Outlook/iCal)</a>
+          </p>`;
+                confirmation.style.display = "block";
+                form.style.display = "none";
+            } else {
+                alert("Something went wrong. Please try again.");
+                submitBtn.disabled = false;
             }
         });
     </script>
