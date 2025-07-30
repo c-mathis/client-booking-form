@@ -32,46 +32,44 @@
         }
 
         input,
+        select,
         button {
             width: 100%;
             padding: 0.75rem;
             margin-bottom: 1rem;
             border-radius: 4px;
             border: 1px solid #ccc;
+            font-size: 1rem;
         }
 
-        .time-grid {
+        .slot-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 0.5rem;
-            margin: 1rem 0;
+            margin-bottom: 1rem;
         }
 
-        .time-slot {
+        .slot {
             padding: 0.5rem;
-            background: #e0e0e0;
+            background: #eee;
             text-align: center;
             border-radius: 4px;
             cursor: pointer;
-            user-select: none;
         }
 
-        .time-slot.selected {
-            background-color: #0070f3;
-            color: white;
+        .slot:hover {
+            background: #ddd;
         }
 
-        .time-slot.disabled {
-            background-color: #ccc;
-            color: #777;
+        .slot.disabled {
+            background: #ccc;
             cursor: not-allowed;
+            pointer-events: none;
         }
 
-        button {
+        .slot.selected {
             background: #0070f3;
             color: white;
-            font-size: 1rem;
-            border: none;
         }
     </style>
 </head>
@@ -88,77 +86,82 @@
         <label for="phone">Phone Number</label>
         <input type="tel" name="phone" id="phone" />
 
-        <label>Pick a Time</label>
-        <div class="time-grid" id="time-grid"></div>
+        <label for="date">Select a Date</label>
+        <input type="date" id="date" required />
 
+        <div id="time-label" style="display:none;"><strong>Pick a Time:</strong></div>
+        <div id="time-grid" class="slot-grid"></div>
+
+        <!-- Hidden fields -->
         <input type="hidden" name="selectedTime" id="selectedTime" />
-        <input type="hidden" name="caseManagerEmail" id="caseManagerEmail" />
+        <input type="hidden" name="cm" id="cm" />
 
         <button type="submit">Book Appointment</button>
     </form>
 
     <script>
-        const params = new URLSearchParams(window.location.search);
-        const cmEmail = params.get("cm");
-        if (cmEmail) {
-            document.getElementById("caseManagerEmail").value = cmEmail;
-        }
+        const cm = new URLSearchParams(window.location.search).get('cm');
+        if (!cm) alert("Missing ?cm= parameter");
+        document.getElementById('cm').value = cm;
 
-        const grid = document.getElementById("time-grid");
-        const selectedTimeInput = document.getElementById("selectedTime");
+        const dateInput = document.getElementById('date');
+        const grid = document.getElementById('time-grid');
+        const selectedTimeInput = document.getElementById('selectedTime');
+        const timeLabel = document.getElementById('time-label');
 
-        const today = new Date();
-        const times = [];
+        let selectedSlot = null;
 
-        // Build slots: 9am to 4:30pm every 30 mins
-        for (let hour = 9; hour <= 16; hour++) {
-            times.push(`${String(hour).padStart(2, "0")}:00`);
-            times.push(`${String(hour).padStart(2, "0")}:30`);
-        }
+        dateInput.addEventListener('change', async () => {
+            const selectedDate = dateInput.value;
+            if (!selectedDate || !cm) return;
 
-        async function getBusySlots(email) {
-            const res = await fetch(`https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(email)}`);
-            if (!res.ok) return [];
-            const { busy = [] } = await res.json();
-            return busy;
-        }
+            const res = await fetch(`https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(cm)}`);
+            const { busy } = await res.json();
 
-        function formatDateTime(hourMinute) {
-            const [hour, minute] = hourMinute.split(":").map(Number);
-            const slotDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute);
-            return slotDate.toISOString();
-        }
+            const selectedDay = new Date(selectedDate);
+            const busySet = new Set(
+                busy
+                    .map(b => new Date(b.start))
+                    .filter(d => d.toDateString() === selectedDay.toDateString())
+                    .map(d => d.getHours() * 60 + d.getMinutes())
+            );
 
-        function renderSlots(disabledTimes = []) {
-            grid.innerHTML = "";
-            times.forEach((t) => {
-                const slotEl = document.createElement("div");
-                slotEl.textContent = t;
-                slotEl.className = "time-slot";
+            // Generate slots from 9 AM to 5 PM, every 30 min
+            const slots = [];
+            for (let h = 9; h < 17; h++) {
+                slots.push(`${h.toString().padStart(2, '0')}:00`);
+                slots.push(`${h.toString().padStart(2, '0')}:30`);
+            }
 
-                const iso = formatDateTime(t);
-                if (disabledTimes.includes(iso)) {
-                    slotEl.classList.add("disabled");
-                } else {
-                    slotEl.addEventListener("click", () => {
-                        document.querySelectorAll(".time-slot").forEach((el) => el.classList.remove("selected"));
-                        slotEl.classList.add("selected");
-                        selectedTimeInput.value = iso;
+            grid.innerHTML = '';
+            timeLabel.style.display = 'block';
+
+            slots.forEach(time => {
+                const [hour, minute] = time.split(':').map(Number);
+                const slotDate = new Date(selectedDate);
+                slotDate.setHours(hour, minute, 0, 0);
+
+                const minsSinceMidnight = hour * 60 + minute;
+                const isBusy = busySet.has(minsSinceMidnight);
+
+                const div = document.createElement('div');
+                div.textContent = time;
+                div.className = 'slot' + (isBusy ? ' disabled' : '');
+                if (!isBusy) {
+                    div.addEventListener('click', () => {
+                        document.querySelectorAll('.slot').forEach(el => el.classList.remove('selected'));
+                        div.classList.add('selected');
+                        selectedSlot = slotDate;
+                        selectedTimeInput.value = slotDate.toISOString();
                     });
                 }
-
-                grid.appendChild(slotEl);
+                grid.appendChild(div);
             });
-        }
 
-        (async () => {
-            if (!cmEmail) {
-                renderSlots();
-                return;
+            if (grid.innerHTML.trim() === "") {
+                grid.innerHTML = "<div>No available time slots today.</div>";
             }
-            const disabledSlots = await getBusySlots(cmEmail);
-            renderSlots(disabledSlots);
-        })();
+        });
     </script>
 </body>
 
