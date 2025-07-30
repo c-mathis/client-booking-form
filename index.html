@@ -4,50 +4,141 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Book Your Appointment</title>
+    <title>Schedule Your Appointment</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.75rem;
+            color: #333;
+            text-align: center;
+        }
+
+        p {
+            text-align: center;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #444;
+            font-weight: 500;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1.25rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #3182ce;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.3);
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            font-size: 1rem;
+            background-color: #3182ce;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #2563eb;
+        }
+
+        .success-message {
+            text-align: center;
+            color: green;
+            font-weight: bold;
+            margin-top: 1rem;
+        }
+    </style>
 </head>
 
-<body style="font-family: sans-serif; padding: 2rem; max-width: 500px; margin: auto;">
-    <h2>📅 Schedule Your Appointment</h2>
-    <form id="bookingForm">
-        <label>Name:<br>
-            <input type="text" name="name" required>
-        </label><br><br>
+<body>
+    <div class="container">
+        <h1>Schedule Your Appointment</h1>
+        <p>Fill out the form below to get started.</p>
 
-        <label>Email:<br>
-            <input type="email" name="email" required>
-        </label><br><br>
+        <form id="booking-form">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name" required />
 
-        <label>Phone:<br>
-            <input type="text" name="phone">
-        </label><br><br>
+            <label for="email">Email Address</label>
+            <input type="email" id="email" name="email" required />
 
-        <label>Select Time:<br>
-            <input type="datetime-local" name="selectedTime" required>
-        </label><br><br>
+            <label for="phone">Phone Number</label>
+            <input type="tel" id="phone" name="phone" required />
 
-        <input type="hidden" name="caseManagerEmail" value="calendar@fivestartaxhelp.com">
+            <label for="selectedTime">Preferred Time</label>
+            <input type="datetime-local" id="selectedTime" name="selectedTime" required />
 
-        <button type="submit">Book Appointment</button>
-    </form>
+            <label for="caseManagerEmail">Case Manager Email</label>
+            <input type="email" id="caseManagerEmail" name="caseManagerEmail"
+                placeholder="e.g. jessica@fivestartaxhelp.com" required />
 
-    <p id="responseMessage" style="margin-top: 1rem;"></p>
+            <button type="submit">Book Appointment</button>
+        </form>
+
+        <div class="success-message" id="successMessage" style="display: none;">
+            ✅ Appointment request received!
+        </div>
+    </div>
 
     <script>
-        document.getElementById("bookingForm").addEventListener("submit", async function (e) {
+        const form = document.getElementById("booking-form");
+        const successMessage = document.getElementById("successMessage");
+
+        form.addEventListener("submit", async (e) => {
             e.preventDefault();
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
 
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form).entries());
-
-            const response = await fetch("https://appointment-worker.cameron-07f.workers.dev", {
+            const response = await fetch("https://appointment-worker.cameron-07f.workers.dev/", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data)
+                body: JSON.stringify(data),
             });
 
-            const result = await response.json();
-            document.getElementById("responseMessage").innerText = result.message || "Submitted!";
+            if (response.ok) {
+                successMessage.style.display = "block";
+                form.reset();
+            } else {
+                alert("There was a problem submitting your request. Please try again.");
+            }
         });
     </script>
 </body>
