@@ -32,7 +32,7 @@
         }
 
         input,
-        select {
+        button {
             width: 100%;
             padding: 0.75rem;
             margin-bottom: 1rem;
@@ -40,14 +40,38 @@
             border: 1px solid #ccc;
         }
 
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .time-slot {
+            padding: 0.5rem;
+            background: #e0e0e0;
+            text-align: center;
+            border-radius: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .time-slot.selected {
+            background-color: #0070f3;
+            color: white;
+        }
+
+        .time-slot.disabled {
+            background-color: #ccc;
+            color: #777;
+            cursor: not-allowed;
+        }
+
         button {
             background: #0070f3;
             color: white;
-            border: none;
-            padding: 1rem;
-            width: 100%;
-            border-radius: 4px;
             font-size: 1rem;
+            border: none;
         }
     </style>
 </head>
@@ -64,22 +88,77 @@
         <label for="phone">Phone Number</label>
         <input type="tel" name="phone" id="phone" />
 
-        <label for="selectedTime">Preferred Appointment Time</label>
-        <input type="datetime-local" name="selectedTime" id="selectedTime" required />
+        <label>Pick a Time</label>
+        <div class="time-grid" id="time-grid"></div>
 
-        <!-- Hidden Case Manager Email from URL Param -->
+        <input type="hidden" name="selectedTime" id="selectedTime" />
         <input type="hidden" name="caseManagerEmail" id="caseManagerEmail" />
 
         <button type="submit">Book Appointment</button>
     </form>
 
     <script>
-        // Pull `?cm=email` from URL and insert into hidden field
         const params = new URLSearchParams(window.location.search);
-        const cmEmail = params.get('cm');
+        const cmEmail = params.get("cm");
         if (cmEmail) {
-            document.getElementById('caseManagerEmail').value = cmEmail;
+            document.getElementById("caseManagerEmail").value = cmEmail;
         }
+
+        const grid = document.getElementById("time-grid");
+        const selectedTimeInput = document.getElementById("selectedTime");
+
+        const today = new Date();
+        const times = [];
+
+        // Build slots: 9am to 4:30pm every 30 mins
+        for (let hour = 9; hour <= 16; hour++) {
+            times.push(`${String(hour).padStart(2, "0")}:00`);
+            times.push(`${String(hour).padStart(2, "0")}:30`);
+        }
+
+        async function getBusySlots(email) {
+            const res = await fetch(`https://appointment-worker.cameron-07f.workers.dev/?check=1&cm=${encodeURIComponent(email)}`);
+            if (!res.ok) return [];
+            const { busy = [] } = await res.json();
+            return busy;
+        }
+
+        function formatDateTime(hourMinute) {
+            const [hour, minute] = hourMinute.split(":").map(Number);
+            const slotDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute);
+            return slotDate.toISOString();
+        }
+
+        function renderSlots(disabledTimes = []) {
+            grid.innerHTML = "";
+            times.forEach((t) => {
+                const slotEl = document.createElement("div");
+                slotEl.textContent = t;
+                slotEl.className = "time-slot";
+
+                const iso = formatDateTime(t);
+                if (disabledTimes.includes(iso)) {
+                    slotEl.classList.add("disabled");
+                } else {
+                    slotEl.addEventListener("click", () => {
+                        document.querySelectorAll(".time-slot").forEach((el) => el.classList.remove("selected"));
+                        slotEl.classList.add("selected");
+                        selectedTimeInput.value = iso;
+                    });
+                }
+
+                grid.appendChild(slotEl);
+            });
+        }
+
+        (async () => {
+            if (!cmEmail) {
+                renderSlots();
+                return;
+            }
+            const disabledSlots = await getBusySlots(cmEmail);
+            renderSlots(disabledSlots);
+        })();
     </script>
 </body>
 
