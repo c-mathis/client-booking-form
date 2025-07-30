@@ -117,7 +117,7 @@
         }
 
         async function getBusySlots(email) {
-            const res = await fetch(`https://appointment-worker.cameron-07f.workers.dev/?check=1&cm=${encodeURIComponent(email)}`);
+            const res = await fetch(`https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(email)}`);
             if (!res.ok) return [];
             const { busy = [] } = await res.json();
             return busy;
