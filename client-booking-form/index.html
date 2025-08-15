@@ -119,13 +119,18 @@
 
     dateInput.addEventListener("change", async () => {
       const selectedDate = dateInput.value;
-      if (!selectedDate || !cm) return;
+      console.log("Date changed:", selectedDate, "CM:", cm);
+      if (!selectedDate || !cm) {
+        console.log("Missing date or CM, returning");
+        return;
+      }
 
       timesDiv.innerHTML = "<em>Loading...</em>";
       const response = await fetch(
         `https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(cm)}`
       );
       const data = await response.json();
+      console.log("Busy slots:", data.busy);
 
       const busyRanges = data.busy.map((b) => ({
         start: new Date(b.start),
@@ -145,12 +150,21 @@
           );
 
           if (!isBusy) {
-            slots.push(slot.toISOString());
+            // Create timezone-neutral datetime string
+            const year = slot.getFullYear();
+            const month = String(slot.getMonth() + 1).padStart(2, '0');
+            const day = String(slot.getDate()).padStart(2, '0');
+            const hours = String(slot.getHours()).padStart(2, '0');
+            const minutes = String(slot.getMinutes()).padStart(2, '0');
+            const localISOString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+            console.log("Generated slot:", localISOString);
+            slots.push(localISOString);
           }
         }
       }
 
       availableTimes = slots;
+      console.log("Available slots:", slots.length);
       timesDiv.innerHTML = "";
 
       if (slots.length === 0) {
