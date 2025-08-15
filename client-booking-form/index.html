@@ -183,6 +183,8 @@
           document.querySelectorAll(".slot").forEach((el) => el.classList.remove("selected"));
           btn.classList.add("selected");
           selectedTimeInput.value = iso;
+          console.log("🔍 Selected time:", iso);
+          console.log("🔍 Selected Date object:", new Date(iso));
         };
         timesDiv.appendChild(btn);
       });
@@ -190,6 +192,8 @@
 
     document.getElementById("booking-form").addEventListener("submit", function (e) {
       const selected = selectedTimeInput.value;
+      console.log("🚀 Submitting with selected time:", selected);
+      console.log("🚀 Date object being sent:", new Date(selected));
       if (!selected || !availableTimes.includes(selected)) {
         alert("Please select a valid future time slot.");
         e.preventDefault();
