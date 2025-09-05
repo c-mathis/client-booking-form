@@ -1,204 +1,313 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Book Your Appointment</title>
-  <!-- Timezone fix applied -->
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 2rem;
-      background: #f4f4f4;
-      max-width: 600px;
-      margin: auto;
-    }
-
-    h1 {
-      text-align: center;
-    }
-
-    form {
-      background: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
-    }
-
-    label {
-      display: block;
-      margin: 1rem 0 0.25rem;
-      font-weight: bold;
-    }
-
-    input,
-    select {
-      width: 100%;
-      padding: 0.75rem;
-      margin-bottom: 1rem;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 0.5rem;
-      margin-bottom: 1rem;
-    }
-
-    .slot {
-      padding: 0.75rem;
-      background: #eee;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      text-align: center;
-      cursor: pointer;
-    }
-
-    .slot.selected {
-      background: #0070f3;
-      color: white;
-      font-weight: bold;
-    }
-
-    button {
-      background: #0070f3;
-      color: white;
-      border: none;
-      padding: 1rem;
-      width: 100%;
-      border-radius: 4px;
-      font-size: 1rem;
-    }
-
-    .hidden {
-      display: none;
-    }
-  </style>
-</head>
-<body>
-  <h1>Book Your Appointment</h1>
-
-  <form id="booking-form" method="POST" action="https://appointment-worker.cameron-07f.workers.dev/">
-    <label for="name">Your Name</label>
-    <input type="text" name="name" id="name" required />
-
-    <label for="email">Your Email</label>
-    <input type="email" name="email" id="email" required />
-
-    <label for="phone">Phone Number</label>
-    <input type="tel" name="phone" id="phone" />
-
-    <label for="date">Select a Day</label>
-    <input type="date" id="date" required />
-
-    <label>Pick a Time</label>
-    <div id="times" class="grid"></div>
-
-    <input type="hidden" name="selectedTime" id="selectedTime" />
-    <input type="hidden" name="cm" id="caseManagerEmail" />
-
-    <button type="submit">Book Appointment</button>
-  </form>
-
-  <script>
-    const params = new URLSearchParams(window.location.search);
-    const cm = params.get("cm");
-    if (cm) {
-      document.getElementById("caseManagerEmail").value = cm;
-    }
-
-    const timesDiv = document.getElementById("times");
-    const dateInput = document.getElementById("date");
-    const selectedTimeInput = document.getElementById("selectedTime");
-
-    const today = new Date().toISOString().split("T")[0];
-    dateInput.setAttribute("min", today);
-
-    let availableTimes = [];
-
-    dateInput.addEventListener("change", async () => {
-      const selectedDate = dateInput.value;
-      console.log("Date changed:", selectedDate, "CM:", cm);
-      if (!selectedDate || !cm) {
-        console.log("Missing date or CM, returning");
-        return;
-      }
-
-      timesDiv.innerHTML = "<em>Loading...</em>";
-      const response = await fetch(
-        `https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(cm)}`
-      );
-      const data = await response.json();
-      console.log("Busy slots:", data.busy);
-
-      const busyRanges = data.busy.map((b) => ({
-        start: new Date(b.start),
-        end: new Date(b.end),
-      }));
-
-      const dayStart = new Date(`${selectedDate}T08:00:00`);
-      const slots = [];
-
-      for (let h = 8; h < 17; h++) {
-        for (let m = 0; m < 60; m += 30) {
-          const slot = new Date(selectedDate + `T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
-          if (slot <= new Date()) continue;
-
-          const isBusy = busyRanges.some(
-            (range) => slot >= range.start && slot < range.end
-          );
-
-          if (!isBusy) {
-            // Create timezone-neutral datetime string
-            const year = slot.getFullYear();
-            const month = String(slot.getMonth() + 1).padStart(2, '0');
-            const day = String(slot.getDate()).padStart(2, '0');
-            const hours = String(slot.getHours()).padStart(2, '0');
-            const minutes = String(slot.getMinutes()).padStart(2, '0');
-            const localISOString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
-            console.log("Generated slot:", localISOString);
-            slots.push(localISOString);
-          }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Book Your Appointment</title>
+    <!-- Timezone fix applied -->
+    <style>
+        * {
+            box-sizing: border-box;
         }
-      }
 
-      availableTimes = slots;
-      console.log("Available slots:", slots.length);
-      timesDiv.innerHTML = "";
+        body {
+            font-family: sans-serif;
+            padding: 2rem;
+            background: #f4f4f4;
+            max-width: 600px;
+            margin: auto;
+        }
 
-      if (slots.length === 0) {
-        timesDiv.innerHTML = "<em>No available slots.</em>";
-        return;
-      }
+        h1 {
+            text-align: center;
+        }
 
-      slots.forEach((iso) => {
-        const btn = document.createElement("div");
-        btn.className = "slot";
-        const t = new Date(iso);
-        btn.textContent = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        btn.dataset.time = iso;
-        btn.onclick = () => {
-          document.querySelectorAll(".slot").forEach((el) => el.classList.remove("selected"));
-          btn.classList.add("selected");
-          selectedTimeInput.value = iso;
-          console.log("🔍 Selected time:", iso);
-          console.log("🔍 Selected Date object:", new Date(iso));
-        };
-        timesDiv.appendChild(btn);
-      });
-    });
+        form {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+        }
 
-    document.getElementById("booking-form").addEventListener("submit", function (e) {
-      const selected = selectedTimeInput.value;
-      console.log("🚀 Submitting with selected time:", selected);
-      console.log("🚀 Date object being sent:", new Date(selected));
-      if (!selected || !availableTimes.includes(selected)) {
-        alert("Please select a valid future time slot.");
-        e.preventDefault();
-      }
-    });
-  </script>
+        label {
+            display: block;
+            margin: 1rem 0 0.25rem;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #f2f2f2;
+            font-size: 1rem;
+        }
+
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #f2f2f2;
+            font-size: 1rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+            border: 1px solid #f2f2f2;
+            font-size: 1rem;
+            color: #fff;
+            background: #B11E24;
+        }
+
+        .slot-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .slot {
+            padding: 0.5rem;
+            background: #eee;
+            text-align: center;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .slot:hover {
+            background: #ddd;
+        }
+
+        .slot.disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .slot.selected {
+            background: #0070f3;
+            color: white;
+        }
+
+        .confirmation {
+            background: #e6ffed;
+            border: 1px solid #b3e6c1;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 2rem;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <img src="Five-Logo-2025.png" alt="Five Star Tax Logo"
+        style="max-width: 120px; display: block; margin: 0 auto 1.5rem;" />
+    <h1>Book Your Appointment</h1>
+
+    <form id="booking-form" method="POST" action="https://appointment-worker.cameron-07f.workers.dev/">
+        <label for="name">Your Name</label>
+        <input type="text" name="name" id="name" required />
+
+        <label for="email">Your Email</label>
+        <input type="email" name="email" id="email" required />
+
+        <label for="phone">Phone Number</label>
+        <input type="tel" name="phone" id="phone" pattern="[\d\s\-\(\)]{7,}" title="Enter a valid phone number" />
+
+        <label for="date">Select a Date</label>
+        <input type="date" id="date" required />
+
+        <div id="time-label" style="display:none;"><strong>Pick a Time:</strong></div>
+        <div id="time-grid" class="slot-grid"></div>
+
+        <input type="hidden" name="selectedTime" id="selectedTime" />
+        <input type="hidden" name="cm" id="cm" />
+
+        <button type="submit" id="submit-btn">Book Appointment</button>
+    </form>
+
+    <div id="confirmation" class="confirmation" style="display: none;"></div>
+
+    <script>
+        const cm = new URLSearchParams(window.location.search).get('cm');
+        if (!cm) alert("Missing ?cm= parameter");
+        document.getElementById('cm').value = cm;
+
+        const dateInput = document.getElementById('date');
+        const grid = document.getElementById('time-grid');
+        const selectedTimeInput = document.getElementById('selectedTime');
+        const timeLabel = document.getElementById('time-label');
+        const form = document.getElementById('booking-form');
+        const confirmation = document.getElementById('confirmation');
+        const submitBtn = document.getElementById('submit-btn');
+
+        // Set minimum date to today
+        const today = new Date().toISOString().split("T")[0];
+        dateInput.setAttribute("min", today);
+
+        let selectedSlot = null;
+        let availableTimes = [];
+
+        dateInput.addEventListener('change', async () => {
+            const selectedDate = dateInput.value;
+            console.log("🔍 Date changed:", selectedDate, "CM:", cm);
+            if (!selectedDate || !cm) {
+                console.log("❌ Missing date or CM, returning");
+                return;
+            }
+
+            grid.innerHTML = "<em>Loading...</em>";
+            
+            try {
+                const response = await fetch(`https://appointment-worker.cameron-07f.workers.dev/availability?cm=${encodeURIComponent(cm)}`);
+                const data = await response.json();
+                console.log("📅 Busy slots received:", data.busy);
+
+                const busyRanges = data.busy.map((b) => ({
+                    start: new Date(b.start),
+                    end: new Date(b.end),
+                }));
+
+                console.log("📅 Processed busy ranges:", busyRanges);
+
+                const slots = [];
+                for (let h = 8; h < 17; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                        const slot = new Date(selectedDate + `T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+                        console.log("🔍 Checking slot:", slot.toISOString(), "Local time:", slot.toString());
+                        
+                        if (slot <= new Date()) {
+                            console.log("⏰ Slot in past, skipping");
+                            continue;
+                        }
+
+                        const isBusy = busyRanges.some(
+                            (range) => slot >= range.start && slot < range.end
+                        );
+
+                        console.log("🔍 Slot", slot.toLocaleTimeString(), "is busy:", isBusy);
+
+                        if (!isBusy) {
+                            // Create timezone-neutral datetime string
+                            const year = slot.getFullYear();
+                            const month = String(slot.getMonth() + 1).padStart(2, '0');
+                            const day = String(slot.getDate()).padStart(2, '0');
+                            const hours = String(slot.getHours()).padStart(2, '0');
+                            const minutes = String(slot.getMinutes()).padStart(2, '0');
+                            const localISOString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+                            console.log("✅ Available slot created:", localISOString);
+                            slots.push({ time: localISOString, display: slot.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+                        }
+                    }
+                }
+
+                availableTimes = slots.map(s => s.time);
+                console.log("📋 Total available slots:", slots.length);
+                
+                grid.innerHTML = '';
+                timeLabel.style.display = 'block';
+
+                if (slots.length === 0) {
+                    grid.innerHTML = "<div>No available time slots today.</div>";
+                    return;
+                }
+
+                slots.forEach(({ time, display }) => {
+                    const div = document.createElement('div');
+                    div.textContent = display;
+                    div.className = 'slot';
+                    div.addEventListener('click', () => {
+                        console.log("🎯 Time slot clicked:", time);
+                        document.querySelectorAll('.slot').forEach(el => el.classList.remove('selected'));
+                        div.classList.add('selected');
+                        selectedSlot = new Date(time);
+                        selectedTimeInput.value = time;
+                        console.log("🔍 Selected time set to:", time);
+                        console.log("🔍 Selected Date object:", selectedSlot);
+                    });
+                    grid.appendChild(div);
+                });
+
+            } catch (err) {
+                console.error("❌ Failed to fetch availability:", err);
+                grid.innerHTML = "<div>Error loading time slots. Please try again.</div>";
+            }
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const selected = selectedTimeInput.value;
+            console.log("🚀 Form submitted with selected time:", selected);
+            console.log("🚀 Date object being sent:", new Date(selected));
+
+            if (!selected || !availableTimes.includes(selected)) {
+                alert("Please select a valid future time slot.");
+                return;
+            }
+
+            if (!selectedSlot || selectedSlot < new Date()) {
+                alert("Please select a valid future time slot.");
+                return;
+            }
+
+            submitBtn.disabled = true;
+            
+            try {
+                const formData = new FormData(form);
+                const payload = Object.fromEntries(formData.entries());
+                console.log("📤 Sending payload:", payload);
+
+                const res = await fetch("https://appointment-worker.cameron-07f.workers.dev/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    console.log("✅ Booking successful");
+                    const start = new Date(payload.selectedTime);
+                    const end = new Date(start.getTime() + 30 * 60 * 1000);
+                    const format = (d) => d.toISOString().replace(/[-:]|\.\d{3}/g, "").slice(0, 15);
+
+                    const gcal = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Appointment&dates=${format(start)}/${format(end)}&details=Booked+with+Five+Star+Tax&sf=true`;
+                    const icsLink = `data:text/calendar;charset=utf8,BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:${format(start)}
+DTEND:${format(end)}
+SUMMARY:Appointment with Five Star Tax
+DESCRIPTION:Use the email link to join or check your inbox for confirmation
+END:VEVENT
+END:VCALENDAR`.replace(/\n/g, "%0A");
+
+                    confirmation.innerHTML = `
+            <h2>✅ Appointment Confirmed!</h2>
+            <p>We've booked your time and sent an invite.</p>
+            <p>
+              <a href="${gcal}" target="_blank">📅 Add to Google Calendar</a><br/>
+              <a href="${icsLink}" download="appointment.ics">📥 Download .ICS (Outlook/iCal)</a>
+            </p>`;
+                    confirmation.style.display = "block";
+                    form.style.display = "none";
+                } else {
+                    console.error("❌ Booking failed:", await res.text());
+                    alert("Something went wrong. Please try again.");
+                    submitBtn.disabled = false;
+                }
+            } catch (err) {
+                console.error("❌ Request failed:", err);
+                alert("Something went wrong. Please try again.");
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
 </body>
 </html>
