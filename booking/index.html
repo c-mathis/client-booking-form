@@ -63,6 +63,41 @@
             font-size: 1rem;
             color: #fff;
             background: #B11E24;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #9a1620;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            position: relative;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            margin: auto;
+            border: 2px solid transparent;
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
 
         .slot-grid {
@@ -178,9 +213,15 @@
                 console.log("📅 Processed busy ranges:", busyRanges);
 
                 const slots = [];
+                // Parse the selected date as local timezone
+                const baseDate = new Date(selectedDate + 'T00:00:00');
+                console.log("📅 Base date for scheduling:", baseDate.toString());
+                
                 for (let h = 8; h < 17; h++) {
                     for (let m = 0; m < 60; m += 30) {
-                        const slot = new Date(selectedDate + `T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+                        // Create slot in local timezone by setting hours/minutes directly
+                        const slot = new Date(baseDate);
+                        slot.setHours(h, m, 0, 0);
                         console.log("🔍 Checking slot:", slot.toISOString(), "Local time:", slot.toString());
                         
                         if (slot <= new Date()) {
@@ -195,14 +236,11 @@
                         console.log("🔍 Slot", slot.toLocaleTimeString(), "is busy:", isBusy);
 
                         if (!isBusy) {
-                            // Create timezone-neutral datetime string
-                            const year = slot.getFullYear();
-                            const month = String(slot.getMonth() + 1).padStart(2, '0');
-                            const day = String(slot.getDate()).padStart(2, '0');
-                            const hours = String(slot.getHours()).padStart(2, '0');
-                            const minutes = String(slot.getMinutes()).padStart(2, '0');
-                            const localISOString = `${year}-${month}-${day}T${hours}:${minutes}:00`;
+                            // Store the ISO string which preserves the timezone offset
+                            const localISOString = slot.toISOString();
                             console.log("✅ Available slot created:", localISOString);
+                            console.log("🌍 Slot timezone info - Local:", slot.toString(), "UTC:", slot.toISOString());
+                            console.log("🕐 Local display time:", slot.toLocaleTimeString());
                             slots.push({ time: localISOString, display: slot.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
                         }
                     }
@@ -231,6 +269,7 @@
                         selectedTimeInput.value = time;
                         console.log("🔍 Selected time set to:", time);
                         console.log("🔍 Selected Date object:", selectedSlot);
+                        console.log("🌍 Selected timezone info - Local:", selectedSlot.toString(), "UTC:", selectedSlot.toISOString());
                     });
                     grid.appendChild(div);
                 });
@@ -259,11 +298,15 @@
             }
 
             submitBtn.disabled = true;
+            submitBtn.classList.add('loading');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Booking...';
             
             try {
                 const formData = new FormData(form);
                 const payload = Object.fromEntries(formData.entries());
                 console.log("📤 Sending payload:", payload);
+                console.log("🌍 Final timezone check - Selected time UTC:", payload.selectedTime);
 
                 const res = await fetch("https://appointment-worker.cameron-07f.workers.dev/", {
                     method: "POST",
@@ -301,11 +344,15 @@ END:VCALENDAR`.replace(/\n/g, "%0A");
                     console.error("❌ Booking failed:", await res.text());
                     alert("Something went wrong. Please try again.");
                     submitBtn.disabled = false;
+                    submitBtn.classList.remove('loading');
+                    submitBtn.textContent = originalText;
                 }
             } catch (err) {
                 console.error("❌ Request failed:", err);
                 alert("Something went wrong. Please try again.");
                 submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.textContent = originalText;
             }
         });
     </script>
