@@ -111,9 +111,11 @@ async function getAccessToken(env) {
 async function createEvent(token, selectedTime, name, email, phone, calendarOwner) {
 	const endpoint = `https://graph.microsoft.com/v1.0/users/${calendarOwner}/events`;
 
-	const localTime = new Date(selectedTime);
-	const utcTime = new Date(localTime.getTime() - localTime.getTimezoneOffset() * 60000);
-	const endUtc = new Date(utcTime.getTime() + 30 * 60 * 1000); // 30 min duration
+	console.log("📅 Server received selectedTime:", selectedTime);
+	const selectedDateTime = new Date(selectedTime);
+	console.log("📅 Server parsed date:", selectedDateTime.toISOString());
+	console.log("📅 Date parts - Year:", selectedDateTime.getFullYear(), "Month:", selectedDateTime.getMonth() + 1, "Day:", selectedDateTime.getDate());
+	const endDateTime = new Date(selectedDateTime.getTime() + 30 * 60 * 1000); // 30 min duration
 
 	const body = {
 		subject: `📅 Appointment with ${name}`,
@@ -122,23 +124,31 @@ async function createEvent(token, selectedTime, name, email, phone, calendarOwne
 			content: `Client: ${name}<br>Email: ${email}<br>Phone: ${phone || "N/A"}`,
 		},
 		start: {
-			dateTime: utcTime.toISOString(),
+			dateTime: selectedDateTime.toISOString(),
 			timeZone: "UTC",
 		},
 		end: {
-			dateTime: endUtc.toISOString(),
+			dateTime: endDateTime.toISOString(),
 			timeZone: "UTC",
 		},
+		
 		attendees: [
-			{
-				emailAddress: { address: email, name },
-				type: "required",
-			},
-			{
-				emailAddress: { address: "calendar@fivestartaxhelp.com", name: "Team Calendar" },
-				type: "optional", // avoid triggering conflicts
-			}
-		],
+  {
+    emailAddress: { address: email, name },
+    type: "required", // Client
+  },
+  {
+    emailAddress: { address: calendarOwner, name: "Assigned Case Manager" },
+    type: "required", // Case Manager
+  },
+  {
+    emailAddress: {
+      address: "calendar@fivestartaxhelp.com",
+      name: "Team Calendar",
+    },
+    type: "required", // Shared team calendar
+  },
+],
 
 	};
 
